@@ -18,7 +18,7 @@ module suitizen::proposal{
 
      // define category 
      const VOTE: u64 = 0;
-     const DISCUSS: u64 = 0;
+     const DISCUSS: u64 = 1;
 
      // define error
      const ECategoryNotDefined: u64 = 0;
@@ -51,10 +51,16 @@ module suitizen::proposal{
      public struct Proposal has key {
           id : UID,
           category: u64,
+          category_str: String,
           topic: String,
           description: String,
           blob_id: String,
           proposer: ID,
+     }
+
+     public struct TypeDict has key {
+          id: UID,
+          dict: Table<u64, String>,
      }
 
      fun init (otw: PROPOSAL, ctx: &mut TxContext){
@@ -68,7 +74,7 @@ module suitizen::proposal{
 
           let values = vector[
                // topic
-               string::utf8(b"({category}) - {topic}"),
+               string::utf8(b"[{category_str}] - {topic}"),
                // description
                string::utf8(b"{content}"),
                // image_url
@@ -85,11 +91,21 @@ module suitizen::proposal{
           transfer::public_transfer(displayer, deployer);
           transfer::public_transfer(publisher, deployer);
           
+          let mut dict_tab = table::new<u64, String>(ctx);
+          dict_tab.add(VOTE, string::utf8(b"VOTE"));
+          dict_tab.add(DISCUSS, string::utf8(b"DISCUSS"));
+          let dict = TypeDict{
+               id: object::new(ctx),
+               dict: dict_tab,
+          };
+
+          transfer::transfer(dict, ctx.sender());
      }
 
      #[allow(lint(share_owned))]
      public entry fun new_proposal(
           config: &GlobalConfig,
+          type_dict: &TypeDict,
           card: &SuitizenCard,
           category: u64,
           topic: String,
@@ -100,6 +116,7 @@ module suitizen::proposal{
      ){          
           let proposal = create_proposal(
                config,
+               type_dict,
                card,
                category,
                topic,
@@ -139,6 +156,7 @@ module suitizen::proposal{
 
      public fun create_proposal (
           config: &GlobalConfig,
+          type_dict: &TypeDict,
           card: &SuitizenCard,
           category: u64,
           topic: String,
@@ -155,6 +173,7 @@ module suitizen::proposal{
           let mut proposal = Proposal {
                id: object::new(ctx),
                category,
+               category_str: *type_dict.dict.borrow(category),
                topic,
                description,
                blob_id,
@@ -201,6 +220,15 @@ module suitizen::proposal{
                     content,
                }
           );
+     }
+     public fun add_type(
+          config: &GlobalConfig,
+          dict: &mut TypeDict,
+          key: u64,
+          value: String,
+     ){
+          config::assert_if_version_not_matched(config, VERSION);
+          dict.dict.add(key, value);
      }
 
      fun attach_discussion_thread(
