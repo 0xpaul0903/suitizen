@@ -2,11 +2,10 @@
 
 [move]
 version = 2
-manifest_digest = "4B82835F5529A385344843F28662882F47FB3A824A377D00F1DF45C450D8FC19"
-deps_digest = "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3"
+manifest_digest = "46237532E69A915252CA1CEA72E1CC2A30B08880E38C540C74AC739779316C96"
+deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
 dependencies = [
   { name = "Sui" },
-  { name = "blob_store" },
   { name = "suins" },
 ]
 
@@ -23,23 +22,15 @@ dependencies = [
 ]
 
 [[move.package]]
-name = "blob_store"
-source = { local = "blob_store" }
-
-dependencies = [
-  { name = "Sui" },
-]
-
-[[move.package]]
 name = "suins"
-source = { local = "suins" }
+source = { local = "lib/suins" }
 
 dependencies = [
   { name = "Sui" },
 ]
 
 [move.toolchain-version]
-compiler-version = "1.31.1"
+compiler-version = "1.32.0"
 edition = "2024.beta"
 flavor = "sui"
 
@@ -47,6 +38,6 @@ flavor = "sui"
 
 [env.testnet]
 chain-id = "4c78adac"
-original-published-id = "0x1cdb9b0a0308b66adb1061cd9cabfff4dbe821fc1524f67840d3a6894254a65c"
-latest-published-id = "0x1cdb9b0a0308b66adb1061cd9cabfff4dbe821fc1524f67840d3a6894254a65c"
+original-published-id = "0x761a35868a6295f8bd600811dfda26119978e361b702043fa1cfa20365deefa0"
+latest-published-id = "0x761a35868a6295f8bd600811dfda26119978e361b702043fa1cfa20365deefa0"
 published-version = "1"
