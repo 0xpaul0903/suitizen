@@ -1,10 +1,15 @@
 module suitizen::config{
 
+    use sui::{
+        table::{Self, Table},
+    };
+
     const EVersionNotMatched: u64 = 1;
 
     public struct GlobalConfig has key{ 
         id: UID,
         version: u64,
+        proposal_state: Table<u64, u64>,
     }
 
     public struct AdminCap has key{
@@ -17,10 +22,14 @@ module suitizen::config{
             id: object::new(ctx),
         };
 
-        let config = GlobalConfig{
+        let mut config = GlobalConfig{
             id: object::new(ctx),
             version: 1u64,
+            proposal_state: table::new<u64, u64>(ctx),
         };
+
+        config.proposal_state.add(0, 0); // Vote Proposal init to 0
+        config.proposal_state.add(1, 0); // Discuss Proposal init to 0
 
         transfer::transfer(admin_cap, ctx.sender());
         transfer::share_object(config);
@@ -30,6 +39,12 @@ module suitizen::config{
         config: &mut GlobalConfig,
     ){
         config.version = config.version + 1;
+    }
+
+    public(package) fun proposal_state(
+        config: &GlobalConfig,
+    ): &Table<u64, u64>{
+        &config.proposal_state
     }
 
     public(package) fun assert_if_version_not_matched(

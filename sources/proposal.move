@@ -2,16 +2,15 @@ module suitizen::proposal{
 
      use sui::{
           table::{Self, Table},
-          package::{Self},
-          display::{Self,},
           dynamic_field as df,
+          clock::{Clock},
      };
 
      use std::{
           string::{Self, String},
      };
 
-     use suitizen::suitizen::{SuitizenCard};
+     use suitizen::suitizen::{Self, SuitizenCard};
      use suitizen::config::{Self, GlobalConfig};
 
      const VERSION: u64 = 1;
@@ -25,8 +24,6 @@ module suitizen::proposal{
      const EVoteOptionLownerThanTwo: u64 = 1;
      const ECategoryNoCorrect: u64 = 2;
      const EAlreadyVoted: u64 = 3;
-
-     public struct PROPOSAL has drop{}
 
      public struct DiscussionThread has copy, drop ,store {}
      public struct VoteSituation has copy, drop ,store {}
@@ -47,14 +44,21 @@ module suitizen::proposal{
           content: String,
           amount: u64,
      } 
+     
+     public struct ProposalRecord has key {
+          id: UID,
+          vote_tab: Table<u64, ID>,
+          discuss_tab: Table<u64, ID>, 
+     }
+
 
      public struct Proposal has key {
           id : UID,
+          flow_num: u64,
           category: u64,
           category_str: String,
           topic: String,
           description: String,
-          blob_id: String,
           proposer: ID,
      }
 
@@ -63,34 +67,14 @@ module suitizen::proposal{
           dict: Table<u64, String>,
      }
 
-     fun init (otw: PROPOSAL, ctx: &mut TxContext){
+     fun init (ctx: &mut TxContext){
 
-          // setup Kapy display
-          let keys = vector[
-               string::utf8(b"name"),
-               string::utf8(b"description"),
-               string::utf8(b"image_url"),
-          ];
+          let proposal_record = ProposalRecord{
+               id: object::new(ctx),
+               vote_tab: table::new<u64, ID>(ctx),
+               discuss_tab: table::new<u64, ID>(ctx),
+          };
 
-          let values = vector[
-               // topic
-               string::utf8(b"[{category_str}] - {topic}"),
-               // description
-               string::utf8(b"{content}"),
-               // image_url
-               string::utf8(b"https://aggregator-devnet.walrus.space/v1/{blob_id}"),
-          ];
-
-          let deployer = ctx.sender();
-          let publisher = package::claim(otw, ctx);
-          let mut displayer = display::new_with_fields<Proposal>(
-               &publisher, keys, values, ctx,
-          );
-          display::update_version(&mut displayer);
-
-          transfer::public_transfer(displayer, deployer);
-          transfer::public_transfer(publisher, deployer);
-          
           let mut dict_tab = table::new<u64, String>(ctx);
           dict_tab.add(VOTE, string::utf8(b"VOTE"));
           dict_tab.add(DISCUSS, string::utf8(b"DISCUSS"));
@@ -100,29 +84,32 @@ module suitizen::proposal{
           };
 
           transfer::transfer(dict, ctx.sender());
+          transfer::share_object(proposal_record);
      }
 
      #[allow(lint(share_owned))]
      public entry fun new_proposal(
           config: &GlobalConfig,
+          proposal_record: &mut ProposalRecord,
           type_dict: &TypeDict,
           card: &SuitizenCard,
           category: u64,
           topic: String,
           description: String,
-          blob_id: String,
           init_contents: vector<String>,
+          clock: &Clock,
           ctx: &mut TxContext,
      ){          
           let proposal = create_proposal(
                config,
+               proposal_record,
                type_dict,
                card,
                category,
                topic,
                description,
-               blob_id,
                init_contents,
+               clock,
                ctx,
           );
 
@@ -134,11 +121,12 @@ module suitizen::proposal{
           proposal: &mut Proposal,
           card: &mut SuitizenCard,
           vote_option: u64,
+          clock:&Clock,
      ){
           assert_if_category_not_correct(proposal.category, VOTE);
           let vote_status = df::borrow_mut<VoteSituation, VoteStatus>(&mut proposal.id, VoteSituation{});
           assert_if_already_voted(card, vote_status);
-          vote_to(config, vote_status, card, vote_option);
+          vote_to(config, vote_status, card, vote_option, clock);
      }
 
      public entry fun discuss(
@@ -146,44 +134,50 @@ module suitizen::proposal{
           proposal: &mut Proposal,
           card: &mut SuitizenCard,
           content: String, 
+          clock: &Clock, 
      ){
           config::assert_if_version_not_matched(config, VERSION);
 
           assert_if_category_not_correct(proposal.category, DISCUSS);
           let thread = df::borrow_mut<DiscussionThread, vector<Comment>>(&mut proposal.id, DiscussionThread{});
-          discuss_to(config, thread, card, content);
+          discuss_to(config, thread, card, content, clock);
      }
 
      public fun create_proposal (
           config: &GlobalConfig,
+          proposal_record: &mut ProposalRecord,
           type_dict: &TypeDict,
           card: &SuitizenCard,
           category: u64,
           topic: String,
           description: String,
-          blob_id: String,
           init_contents: vector<String>,
+          clock: &Clock,
           ctx: &mut TxContext,
      ): Proposal{
 
           config::assert_if_version_not_matched(config, VERSION);
-
+          assert_if_ns_expired(card, clock);
           assert_if_category_not_defined(category);
+
+          let flow_num = get_flow_num(config, category);
 
           let mut proposal = Proposal {
                id: object::new(ctx),
+               flow_num,
                category,
                category_str: *type_dict.dict.borrow(category),
                topic,
                description,
-               blob_id,
                proposer: object::id(card),
           };
 
           if (category == VOTE){
                attach_vote_options(&mut proposal, init_contents, ctx);
+               proposal_record.vote_tab.add(VOTE, proposal.id.to_inner());
           }else{
                attach_discussion_thread(card, &mut proposal, init_contents);
+               proposal_record.discuss_tab.add(DISCUSS, proposal.id.to_inner());
           };
           proposal
      }
@@ -193,9 +187,10 @@ module suitizen::proposal{
           vote_status: &mut VoteStatus,
           card: &mut SuitizenCard,
           vote_option: u64,
+          clock: &Clock,
      ){
-
           config::assert_if_version_not_matched(config, VERSION);
+          assert_if_ns_expired(card, clock);
 
           let vote_amount = vote_status.options.borrow(vote_option).amount;
           let user_amount = vote_status.user_amount;
@@ -210,8 +205,12 @@ module suitizen::proposal{
           thread: &mut vector<Comment>,
           card: &mut SuitizenCard,
           content: String,
+          clock: &Clock,
+          
      ){
           config::assert_if_version_not_matched(config, VERSION);
+
+          assert_if_ns_expired(card, clock);
 
           thread.push_back(
                Comment{
@@ -278,6 +277,14 @@ module suitizen::proposal{
           df::add(&mut proposal.id, VoteSituation{}, state);
      }
 
+     fun get_flow_num(
+          config: &GlobalConfig,
+          proposal_type: u64,
+     ): u64{
+          let state_tab = config.proposal_state();
+          *state_tab.borrow(proposal_type)
+     }
+
      fun assert_if_category_not_defined(category: u64){
           assert!(category == VOTE || category == DISCUSS, ECategoryNotDefined);
      }
@@ -300,6 +307,13 @@ module suitizen::proposal{
           vote_status: &VoteStatus, 
      ){
           assert!(!vote_status.record.contains(object::id(card)),EAlreadyVoted);
+     }
+
+     fun assert_if_ns_expired(
+          card: &SuitizenCard,
+          clock: &Clock,
+     ){
+          suitizen::assert_if_ns_expired_by_card(card, clock);
      }
 
 }
