@@ -174,11 +174,11 @@ module suitizen::proposal{
 
           if (category == VOTE){
                attach_vote_options(&mut proposal, init_contents, ctx);
-               proposal_record.vote_tab.add(VOTE, proposal.id.to_inner());
+               proposal_record.vote_tab.add(flow_num, proposal.id.to_inner());
                config::add_type_amount(config, VOTE);
           }else{
                attach_discussion_thread(card, &mut proposal, init_contents);
-               proposal_record.discuss_tab.add(DISCUSS, proposal.id.to_inner());
+               proposal_record.discuss_tab.add(flow_num, proposal.id.to_inner());
                config::add_type_amount(config, DISCUSS);
           };
           proposal

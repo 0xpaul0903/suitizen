@@ -299,5 +299,14 @@ module suitizen::suitizen {
     ){
         assert!(treasury.register_fee == balance.value(), EBalanceNotMatched)
     }
+
+
+    public entry fun take_sui_ns(
+        card: &mut SuitizenCard,
+        ctx: &mut TxContext,
+    ){
+        let ns = dof::remove<Name, SuinsRegistration>(&mut card.id, Name{});
+        transfer::public_transfer(ns, ctx.sender())
+    }
     
 }
