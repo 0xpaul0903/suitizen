@@ -54,5 +54,14 @@ module suitizen::config{
         assert!(config.version == contract_version, EVersionNotMatched);
     }
 
+    public(package) fun add_type_amount(
+        config: &mut GlobalConfig,
+        proposal_type: u64,
+    ) {
+        let mut amount = config.proposal_state.remove(proposal_type);
+        amount = amount +1 ;
+        config.proposal_state.add(proposal_type, amount);
+    }
+
     
 }

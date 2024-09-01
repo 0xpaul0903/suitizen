@@ -7,13 +7,14 @@ module suitizen::suitizen {
         package,
         display,
         balance::{Self, Balance},
+        coin::{Self, Coin},
         sui::{SUI},
         dynamic_object_field as dof, 
         clock::{Clock},
     };
 
     use suins::suins_registration::{SuinsRegistration};
-    use suitizen::config::{Self, GlobalConfig};
+    use suitizen::config::{Self, GlobalConfig, AdminCap};
 
     public struct SUITIZEN has drop{}
 
@@ -23,6 +24,8 @@ module suitizen::suitizen {
     const EPfpAlreadyUsed: u64 = 3;
     const ENsExpired: u64 = 4;
     const ENoNsBoound:u64 = 5;
+    const EBalanceNotMatched: u64 = 6;
+    
 
     const VERSION: u64 = 1;
 
@@ -61,7 +64,7 @@ module suitizen::suitizen {
 
         let treasury = Treasury{
             id: object::new(ctx),
-            register_fee: 1000000000,
+            register_fee: 100000000, // register fee : 0.1 SUI
             balance: balance::zero<SUI>(),
         };
 
@@ -102,26 +105,30 @@ module suitizen::suitizen {
     public entry fun mint(
         config: &GlobalConfig,
         registry: &mut Registry,
+        treasury: &mut Treasury,
         sui_ns: SuinsRegistration,
         index: u64,
         pfp_img: String, // blob id
         card_img: String, // blob id 
         face_feature: String, // blob id 
+        coin: Coin<SUI>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
-        let id_card = create_card(config, registry,  sui_ns, index, pfp_img, card_img, face_feature, clock, ctx);
+        let id_card = create_card(config, registry, treasury,  sui_ns, index, pfp_img, card_img, face_feature, coin.into_balance(), clock, ctx);
         transfer::transfer(id_card, ctx.sender())
     }
 
     public fun create_card(
         config: &GlobalConfig,
         registry: &mut Registry,
+        treasury: &mut Treasury, 
         sui_ns: SuinsRegistration,
         index: u64,
         pfp_img: String, // blob id 
         card_img: String, // blob id 
         face_feature: String, // blob id 
+        balance: Balance<SUI>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) : SuitizenCard{
@@ -132,6 +139,7 @@ module suitizen::suitizen {
         assert_if_face_existed(registry, face_feature);
         assert_if_name_existed(registry, &sui_ns);
         assert_if_index_existed(registry, index);
+        assert_if_balance_not_matched(treasury, &balance);
 
         let first_name = *sui_ns.domain().tld();
         let last_name =  *sui_ns.domain().sld();
@@ -154,6 +162,8 @@ module suitizen::suitizen {
         registry.pfp_tab.add(index, pfp_img);
         
         dof::add<Name, SuinsRegistration>(&mut card.id, Name{}, sui_ns);
+
+        treasury.balance.join(balance);
         
         card
     }
@@ -223,6 +233,16 @@ module suitizen::suitizen {
         name.append(card.last_name());
         name
     }
+    public entry fun withdraw(
+        _cap: &AdminCap,
+        treasury: &mut Treasury, 
+        ctx: &mut TxContext, 
+    ){
+        let withdraw_amount = treasury.balance.value();
+        let withdraw_balance = treasury.balance.split(withdraw_amount);
+        let withdraw_coin = coin::from_balance(withdraw_balance, ctx);
+        transfer::public_transfer(withdraw_coin, ctx.sender());
+    }
 
     public(package)fun assert_if_ns_expired_by_card(
         card: &SuitizenCard,
@@ -270,6 +290,14 @@ module suitizen::suitizen {
         card: &SuitizenCard,
     ){
         assert!(dof::exists_(&card.id, Name{}), ENoNsBoound);
+    }
+
+
+    fun assert_if_balance_not_matched(
+        treasury: &Treasury, 
+        balance: &Balance<SUI>,
+    ){
+        assert!(treasury.register_fee == balance.value(), EBalanceNotMatched)
     }
     
 }
