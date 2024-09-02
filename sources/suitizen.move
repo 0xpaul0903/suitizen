@@ -221,7 +221,7 @@ module suitizen::suitizen {
     public fun last_name(
         card: &SuitizenCard,
     ): String{
-        card.first_name
+        card.last_name
     }
 
     public fun name(
