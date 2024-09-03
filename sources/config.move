@@ -10,6 +10,7 @@ module suitizen::config{
         id: UID,
         version: u64,
         proposal_state: Table<u64, u64>,
+        merkle_roots: vector<vector<u8>>,
     }
 
     public struct AdminCap has key{
@@ -26,6 +27,7 @@ module suitizen::config{
             id: object::new(ctx),
             version: 1u64,
             proposal_state: table::new<u64, u64>(ctx),
+            merkle_roots: vector::empty<vector<u8>>(),
         };
 
         config.proposal_state.add(0, 0); // Vote Proposal init to 0
@@ -35,7 +37,23 @@ module suitizen::config{
         transfer::share_object(config);
     }
 
+    public fun add_merkle_root(
+        _: &AdminCap,
+        config: &mut GlobalConfig,
+        root: vector<u8>,
+    ){
+        config.merkle_roots.push_back(root);
+    }
+
+    public fun remove_merkle_root(
+        _: &AdminCap,
+        config: &mut GlobalConfig,
+    ){  
+        config.merkle_roots.pop_back();
+    }
+
     public fun upgrade(
+        _: &AdminCap,
         config: &mut GlobalConfig,
     ){
         config.version = config.version + 1;
@@ -61,6 +79,12 @@ module suitizen::config{
         let mut amount = config.proposal_state.remove(proposal_type);
         amount = amount +1 ;
         config.proposal_state.add(proposal_type, amount);
+    }
+
+    public(package) fun get_merkle_roots(
+        config: &GlobalConfig,
+    ): vector<vector<u8>>{
+        config.merkle_roots
     }
 
     

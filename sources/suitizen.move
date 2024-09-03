@@ -15,6 +15,7 @@ module suitizen::suitizen {
 
     use suins::suins_registration::{SuinsRegistration};
     use suitizen::config::{Self, GlobalConfig, AdminCap};
+    use merkle::merkle_proof::{Self};
 
     public struct SUITIZEN has drop{}
 
@@ -25,6 +26,7 @@ module suitizen::suitizen {
     const ENsExpired: u64 = 4;
     const ENoNsBoound:u64 = 5;
     const EBalanceNotMatched: u64 = 6;
+    const EMerkleTreeVerifyFailed: u64 = 7;
     
 
     const VERSION: u64 = 1;
@@ -104,6 +106,7 @@ module suitizen::suitizen {
 
     public entry fun mint(
         config: &GlobalConfig,
+        merkle_root_idx: u64,
         registry: &mut Registry,
         treasury: &mut Treasury,
         sui_ns: SuinsRegistration,
@@ -111,16 +114,18 @@ module suitizen::suitizen {
         pfp_img: String, // blob id
         card_img: String, // blob id 
         face_feature: String, // blob id 
+        proofs: vector<vector<u8>>,
         coin: Coin<SUI>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
-        let id_card = create_card(config, registry, treasury,  sui_ns, index, pfp_img, card_img, face_feature, coin.into_balance(), clock, ctx);
+        let id_card = create_card(config,merkle_root_idx, registry, treasury,  sui_ns, index, pfp_img, card_img, face_feature, &proofs, coin.into_balance(), clock, ctx);
         transfer::transfer(id_card, ctx.sender())
     }
 
     public fun create_card(
         config: &GlobalConfig,
+        merkle_root_idx: u64,
         registry: &mut Registry,
         treasury: &mut Treasury, 
         sui_ns: SuinsRegistration,
@@ -128,18 +133,22 @@ module suitizen::suitizen {
         pfp_img: String, // blob id 
         card_img: String, // blob id 
         face_feature: String, // blob id 
+        proofs: &vector<vector<u8>>,
         balance: Balance<SUI>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) : SuitizenCard{
 
         config::assert_if_version_not_matched(config, VERSION);
-
         assert_if_ns_expired_by_ns(&sui_ns, clock);
         assert_if_face_existed(registry, face_feature);
         assert_if_name_existed(registry, &sui_ns);
         assert_if_index_existed(registry, index);
         assert_if_balance_not_matched(treasury, &balance);
+
+
+        let root = config::get_merkle_roots(config).borrow(merkle_root_idx);
+        assert_if_verify_fail(proofs, *root, *pfp_img.as_bytes());
 
         let first_name = *sui_ns.domain().tld();
         let last_name =  *sui_ns.domain().sld();
@@ -298,6 +307,14 @@ module suitizen::suitizen {
         balance: &Balance<SUI>,
     ){
         assert!(treasury.register_fee == balance.value(), EBalanceNotMatched)
+    }
+
+    fun assert_if_verify_fail(
+        proofs: &vector<vector<u8>>,
+        root: vector<u8>,
+        leaf: vector<u8>,
+    ){
+        assert!(merkle_proof::verify(proofs, root, leaf), EMerkleTreeVerifyFailed);
     }
 
 

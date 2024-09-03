@@ -2,11 +2,21 @@
 
 [move]
 version = 2
-manifest_digest = "46237532E69A915252CA1CEA72E1CC2A30B08880E38C540C74AC739779316C96"
-deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
+manifest_digest = "54B3E541A57AEF520817A164F35013A6DC4C8772556DD9A56DFD58E40A72379A"
+deps_digest = "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3"
 dependencies = [
+  { name = "Merkle" },
   { name = "Sui" },
   { name = "suins" },
+]
+
+[[move.package]]
+name = "Merkle"
+source = { local = "lib/merkle" }
+
+dependencies = [
+  { name = "MoveStdlib" },
+  { name = "Sui" },
 ]
 
 [[move.package]]
@@ -38,6 +48,6 @@ flavor = "sui"
 
 [env.testnet]
 chain-id = "4c78adac"
-original-published-id = "0x3f21e2c1d44b6cb76cb573269353497e467c2ad6f1cf2bfee5eb56c81bd98781"
-latest-published-id = "0x3f21e2c1d44b6cb76cb573269353497e467c2ad6f1cf2bfee5eb56c81bd98781"
+original-published-id = "0xea7b60894973862df9a8a62737b7ce4d0c4fc1632b2f54e7855bf5b159d18d8f"
+latest-published-id = "0xea7b60894973862df9a8a62737b7ce4d0c4fc1632b2f54e7855bf5b159d18d8f"
 published-version = "1"
