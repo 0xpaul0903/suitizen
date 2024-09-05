@@ -11,6 +11,7 @@ module suitizen::suitizen {
         sui::{SUI},
         dynamic_object_field as dof, 
         clock::{Clock},
+        hash::{Self,},
     };
 
     use suins::suins_registration::{SuinsRegistration};
@@ -148,7 +149,7 @@ module suitizen::suitizen {
 
 
         let root = config::get_merkle_roots(config).borrow(merkle_root_idx);
-        assert_if_verify_fail(proofs, *root, *pfp_img.as_bytes());
+        assert_if_verify_fail(proofs, *root, hash::keccak256(pfp_img.as_bytes()));
 
         let first_name = *sui_ns.domain().tld();
         let last_name =  *sui_ns.domain().sld();
