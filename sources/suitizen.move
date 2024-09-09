@@ -45,10 +45,12 @@ module suitizen::suitizen {
     public struct SuitizenCard has key{
         // sui ns need to be dynamic field
         id: UID,
+        num: u64,
         last_name: String,
         first_name: String,
         card_img: String, // blob id 
-        face_feature: String  // blob id 
+        face_feature: String,  // blob id 
+        birth: u64,
     }
 
     public struct Name has copy, store, drop {}
@@ -84,7 +86,7 @@ module suitizen::suitizen {
             // image_url
             string::utf8(b"https://aggregator-devnet.walrus.space/v1/{card_img}"),
             // project_url
-            string::utf8(b"https://github.com/0xpaul0903/suitizen"),
+            string::utf8(b"https://suitizen.walrus.site"),
         ];
 
         let deployer = ctx.sender();
@@ -103,31 +105,33 @@ module suitizen::suitizen {
     } 
 
     public entry fun mint(
-        config: &GlobalConfig,
+        config: &mut GlobalConfig,
         registry: &mut Registry,
         treasury: &mut Treasury,
         sui_ns: SuinsRegistration,
-        index: u64,
+        img_index: u64,
         pfp_img: String, // blob id
         card_img: String, // blob id 
         face_feature: String, // blob id 
+        birth: u64,
         coin: Coin<SUI>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
-        let id_card = create_card(config, registry, treasury,  sui_ns, index, pfp_img, card_img, face_feature, coin.into_balance(), clock, ctx);
+        let id_card = create_card(config, registry, treasury,  sui_ns, img_index, pfp_img, card_img, face_feature, birth, coin.into_balance(), clock, ctx);
         transfer::transfer(id_card, ctx.sender())
     }
 
     public fun create_card(
-        config: &GlobalConfig,
+        config: &mut GlobalConfig,
         registry: &mut Registry,
         treasury: &mut Treasury, 
         sui_ns: SuinsRegistration,
-        index: u64,
+        img_index: u64,
         pfp_img: String, // blob id 
         card_img: String, // blob id 
         face_feature: String, // blob id 
+        birth: u64,
         balance: Balance<SUI>,
         clock: &Clock,
         ctx: &mut TxContext,
@@ -138,7 +142,7 @@ module suitizen::suitizen {
         assert_if_ns_expired_by_ns(&sui_ns, clock);
         assert_if_face_existed(registry, face_feature);
         assert_if_name_existed(registry, &sui_ns);
-        assert_if_index_existed(registry, index);
+        assert_if_index_existed(registry, img_index);
         assert_if_balance_not_matched(treasury, &balance);
 
         let first_name = *sui_ns.domain().tld();
@@ -148,18 +152,21 @@ module suitizen::suitizen {
         name.append( first_name);
         name.append(last_name);
 
+        config.add_suitizen_amount();
+
         let mut card = SuitizenCard{
             id: object::new(ctx),
+            num: config.citizen_amount(),
             first_name, 
             last_name,
             card_img,
             face_feature,
+            birth,
         };
 
-        
         registry.reg_tab.add(name.into_bytes(), card.id.uid_to_inner());
         registry.face_tab.add(face_feature, card.id.uid_to_inner());
-        registry.pfp_tab.add(index, pfp_img);
+        registry.pfp_tab.add(img_index, pfp_img);
         
         dof::add<Name, SuinsRegistration>(&mut card.id, Name{}, sui_ns);
 
@@ -180,8 +187,8 @@ module suitizen::suitizen {
 
         assert_if_no_ns(card);
 
-        let new_first_name = *sui_ns.domain().sld();
-        let new_last_name = *sui_ns.domain().tld();
+        let new_first_name = *sui_ns.domain().tld();
+        let new_last_name = *sui_ns.domain().sld();
         
         if ((*card.first_name.as_bytes() == *new_first_name.as_bytes()) &&
             (*card.last_name.as_bytes() == *new_last_name.as_bytes())

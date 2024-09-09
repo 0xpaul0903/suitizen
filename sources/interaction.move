@@ -1,4 +1,4 @@
-module suitizen::proposal{
+module suitizen::interaction{
 
      use sui::{
           table::{Self, Table},
@@ -45,21 +45,22 @@ module suitizen::proposal{
           amount: u64,
      } 
      
-     public struct ProposalRecord has key {
+     public struct InteractionRecord has key {
           id: UID,
           vote_tab: Table<u64, ID>,
           discuss_tab: Table<u64, ID>, 
      }
 
 
-     public struct Proposal has key {
+     public struct Interaction has key {
           id : UID,
           flow_num: u64,
           category: u64,
           category_str: String,
           topic: String,
           description: String,
-          proposer: ID,
+          host: ID,
+          last_update: u64,
      }
 
      public struct TypeDict has key {
@@ -69,7 +70,7 @@ module suitizen::proposal{
 
      fun init (ctx: &mut TxContext){
 
-          let proposal_record = ProposalRecord{
+          let interaction_record = InteractionRecord{
                id: object::new(ctx),
                vote_tab: table::new<u64, ID>(ctx),
                discuss_tab: table::new<u64, ID>(ctx),
@@ -84,13 +85,13 @@ module suitizen::proposal{
           };
 
           transfer::share_object(dict);
-          transfer::share_object(proposal_record);
+          transfer::share_object(interaction_record);
      }
 
      #[allow(lint(share_owned))]
-     public entry fun new_proposal(
+     public entry fun new_interaction(
           config: &mut GlobalConfig,
-          proposal_record: &mut ProposalRecord,
+          interaction_record: &mut InteractionRecord,
           type_dict: &TypeDict,
           card: &SuitizenCard,
           category: u64,
@@ -100,9 +101,9 @@ module suitizen::proposal{
           clock: &Clock,
           ctx: &mut TxContext,
      ){          
-          let proposal = create_proposal(
+          let interaction = create_interaction(
                config,
-               proposal_record,
+               interaction_record,
                type_dict,
                card,
                category,
@@ -113,39 +114,41 @@ module suitizen::proposal{
                ctx,
           );
 
-          transfer::share_object(proposal);
+          transfer::share_object(interaction);
      }
 
      public entry fun vote(
           config: &GlobalConfig,
-          proposal: &mut Proposal,
+          interaction: &mut Interaction,
           card: &mut SuitizenCard,
           vote_option: u64,
           clock:&Clock,
      ){
-          assert_if_category_not_correct(proposal.category, VOTE);
-          let vote_status = df::borrow_mut<VoteSituation, VoteStatus>(&mut proposal.id, VoteSituation{});
+          assert_if_category_not_correct(interaction.category, VOTE);
+          let vote_status = df::borrow_mut<VoteSituation, VoteStatus>(&mut interaction.id, VoteSituation{});
           assert_if_already_voted(card, vote_status);
           vote_to(config, vote_status, card, vote_option, clock);
+          update_last_update_ts(interaction, clock);
      }
 
      public entry fun discuss(
           config: &GlobalConfig,
-          proposal: &mut Proposal,
+          interaction: &mut Interaction,
           card: &mut SuitizenCard,
           content: String, 
           clock: &Clock, 
      ){
           config::assert_if_version_not_matched(config, VERSION);
 
-          assert_if_category_not_correct(proposal.category, DISCUSS);
-          let thread = df::borrow_mut<DiscussionThread, vector<Comment>>(&mut proposal.id, DiscussionThread{});
+          assert_if_category_not_correct(interaction.category, DISCUSS);
+          let thread = df::borrow_mut<DiscussionThread, vector<Comment>>(&mut interaction.id, DiscussionThread{});
           discuss_to(config, thread, card, content, clock);
+          update_last_update_ts(interaction, clock);
      }
 
-     public fun create_proposal (
+     public fun create_interaction (
           config: &mut GlobalConfig,
-          proposal_record: &mut ProposalRecord,
+          interaction_record: &mut InteractionRecord,
           type_dict: &TypeDict,
           card: &SuitizenCard,
           category: u64,
@@ -154,7 +157,7 @@ module suitizen::proposal{
           init_contents: vector<String>,
           clock: &Clock,
           ctx: &mut TxContext,
-     ): Proposal{
+     ): Interaction{
 
           config::assert_if_version_not_matched(config, VERSION);
           assert_if_ns_expired(card, clock);
@@ -162,32 +165,33 @@ module suitizen::proposal{
 
           let flow_num = get_flow_num(config, category);
 
-          let mut proposal = Proposal {
+          let mut interaction = Interaction {
                id: object::new(ctx),
                flow_num,
                category,
                category_str: *type_dict.dict.borrow(category),
                topic,
                description,
-               proposer: object::id(card),
+               host: object::id(card),
+               last_update: clock.timestamp_ms(),
           };
 
           if (category == VOTE){
-               attach_vote_options(&mut proposal, init_contents, ctx);
-               proposal_record.vote_tab.add(flow_num, proposal.id.to_inner());
+               attach_vote_options(&mut interaction, init_contents, ctx);
+               interaction_record.vote_tab.add(flow_num, interaction.id.to_inner());
                config::add_type_amount(config, VOTE);
           }else{
-               attach_discussion_thread(card, &mut proposal, init_contents);
-               proposal_record.discuss_tab.add(flow_num, proposal.id.to_inner());
+               attach_discussion_thread(card, &mut interaction, init_contents);
+               interaction_record.discuss_tab.add(flow_num, interaction.id.to_inner());
                config::add_type_amount(config, DISCUSS);
           };
-          proposal
+          interaction
      }
 
-     public fun vote_to(
+     fun vote_to(
           config: &GlobalConfig,
           vote_status: &mut VoteStatus,
-          card: &mut SuitizenCard,
+          card: &SuitizenCard,
           vote_option: u64,
           clock: &Clock,
      ){
@@ -234,7 +238,7 @@ module suitizen::proposal{
 
      fun attach_discussion_thread(
           card: &SuitizenCard,
-          proposal: &mut Proposal,
+          interaction: &mut Interaction,
           init_comments: vector<String>,
      ){
           let mut comments = vector::empty<Comment>();
@@ -250,11 +254,11 @@ module suitizen::proposal{
                current_idx  = current_idx + 1;
           };
           
-          df::add(&mut proposal.id, DiscussionThread{}, comments);
+          df::add(&mut interaction.id, DiscussionThread{}, comments);
      }
 
      fun attach_vote_options(
-          proposal: &mut Proposal,
+          interaction: &mut Interaction,
           vote_options: vector<String>,
           ctx: &mut TxContext,
      ){
@@ -276,15 +280,22 @@ module suitizen::proposal{
                record: table::new<ID, u64>(ctx),
           };
 
-          df::add(&mut proposal.id, VoteSituation{}, state);
+          df::add(&mut interaction.id, VoteSituation{}, state);
      }
 
      fun get_flow_num(
           config: &GlobalConfig,
-          proposal_type: u64,
+          interaction_type: u64,
      ): u64{
-          let state_tab = config.proposal_state();
-          *state_tab.borrow(proposal_type)
+          let state_tab = config.interaction_state();
+          *state_tab.borrow(interaction_type)
+     }
+
+     fun update_last_update_ts(
+          interaction: &mut Interaction,
+          clock: &Clock,
+     ){
+          interaction.last_update = clock.timestamp_ms();
      }
 
      fun assert_if_category_not_defined(category: u64){

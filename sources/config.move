@@ -9,7 +9,8 @@ module suitizen::config{
     public struct GlobalConfig has key{ 
         id: UID,
         version: u64,
-        proposal_state: Table<u64, u64>,
+        citizen_amount: u64,
+        interaction_state: Table<u64, u64>,
     }
 
     public struct AdminCap has key{
@@ -25,11 +26,12 @@ module suitizen::config{
         let mut config = GlobalConfig{
             id: object::new(ctx),
             version: 1u64,
-            proposal_state: table::new<u64, u64>(ctx),
+            citizen_amount: 0,
+            interaction_state: table::new<u64, u64>(ctx),
         };
 
-        config.proposal_state.add(0, 0); // Vote Proposal init to 0
-        config.proposal_state.add(1, 0); // Discuss Proposal init to 0
+        config.interaction_state.add(0, 0); // Vote Proposal init to 0
+        config.interaction_state.add(1, 0); // Discuss Proposal init to 0
 
         transfer::transfer(admin_cap, ctx.sender());
         transfer::share_object(config);
@@ -41,10 +43,16 @@ module suitizen::config{
         config.version = config.version + 1;
     }
 
-    public(package) fun proposal_state(
+    public fun citizen_amount(
+        config: &mut GlobalConfig,
+    ): u64{
+        config.citizen_amount
+    }
+
+    public(package) fun interaction_state(
         config: &GlobalConfig,
     ): &Table<u64, u64>{
-        &config.proposal_state
+        &config.interaction_state
     }
 
     public(package) fun assert_if_version_not_matched(
@@ -56,11 +64,17 @@ module suitizen::config{
 
     public(package) fun add_type_amount(
         config: &mut GlobalConfig,
-        proposal_type: u64,
+        interaction_type: u64,
     ) {
-        let mut amount = config.proposal_state.remove(proposal_type);
+        let mut amount = config.interaction_state.remove(interaction_type);
         amount = amount +1 ;
-        config.proposal_state.add(proposal_type, amount);
+        config.interaction_state.add(interaction_type, amount);
+    }
+
+    public(package) fun add_suitizen_amount(
+        config: &mut GlobalConfig,
+    ){
+        config.citizen_amount = config.citizen_amount + 1;
     }
 
     
