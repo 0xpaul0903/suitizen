@@ -10,6 +10,7 @@ module suitizen::config{
         id: UID,
         version: u64,
         citizen_amount: u64,
+        guardian_limit: u64,
         interaction_state: Table<u64, u64>,
     }
 
@@ -27,6 +28,7 @@ module suitizen::config{
             id: object::new(ctx),
             version: 1u64,
             citizen_amount: 0,
+            guardian_limit: 3,
             interaction_state: table::new<u64, u64>(ctx),
         };
 
@@ -41,6 +43,19 @@ module suitizen::config{
         config: &mut GlobalConfig,
     ){
         config.version = config.version + 1;
+    }
+
+    public fun set_guardian_limit(
+        config: &mut GlobalConfig,
+        limit: u64,
+    ){
+        config.guardian_limit = limit;
+    }
+
+    public fun guardian_limit(
+        config: &GlobalConfig,
+    ): u64{
+        config.guardian_limit
     }
 
     public fun citizen_amount(
