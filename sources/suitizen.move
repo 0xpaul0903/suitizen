@@ -31,6 +31,7 @@ module suitizen::suitizen {
     const EAlreadyConfirmed: u64 = 9;
     const ENotConfiredBefore: u64 = 10;
     const ENotArrivedThreshold: u64 = 11;
+    const ECardIdNotMatched: u64 = 12;
     
 
     const VERSION: u64 = 1;
@@ -63,6 +64,7 @@ module suitizen::suitizen {
     public struct TransferRequest has key {
         id: UID,
         num: u64,
+        card_id: ID,
         new_owner: address,
         confirm_threshold: u64,
         current_confirm: u64,
@@ -169,8 +171,10 @@ module suitizen::suitizen {
         config: &GlobalConfig,
         record: &mut TransferRequestRecord,
         request: TransferRequest,
+        card: &SuitizenCard,
     ){
         config::assert_if_version_not_matched(config, VERSION);
+        assert_if_card_id_not_matched(&request, card);
         delete_transfer_request(record, request);
     }
 
@@ -316,6 +320,7 @@ module suitizen::suitizen {
         let transfer_request = TransferRequest{
             id: object::new(ctx),
             num: record.request_amount,
+            card_id: card.id.to_inner(),
             new_owner,
             confirm_threshold,
             current_confirm: 0,
@@ -492,6 +497,13 @@ module suitizen::suitizen {
         assert!(request.current_confirm >= request.confirm_threshold, ENotArrivedThreshold);
     }
 
+    fun assert_if_card_id_not_matched(
+        request: &TransferRequest,
+        card: &SuitizenCard,
+    ){
+        assert!(request.card_id.to_bytes() == card.id.to_inner().to_bytes(), ECardIdNotMatched);
+    }
+
     fun copy_guardian(
         card: &SuitizenCard,
     ): vector<ID>{
@@ -514,6 +526,7 @@ module suitizen::suitizen {
         let TransferRequest{
             id,
             num: _,
+            card_id: _,
             new_owner: _,
             confirm_threshold: _,
             current_confirm: _,
