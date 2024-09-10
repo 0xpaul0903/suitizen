@@ -63,7 +63,6 @@ module suitizen::suitizen {
 
     public struct TransferRequest has key {
         id: UID,
-        num: u64,
         card_id: ID,
         new_owner: address,
         confirm_threshold: u64,
@@ -73,8 +72,7 @@ module suitizen::suitizen {
 
     public struct TransferRequestRecord has key {
         id: UID,
-        request_ids: Table<u64,ID>,
-        request_amount: u64,
+        request_ids: Table<ID,vector<ID>>,
     }
 
     public struct Name has copy, store, drop {}
@@ -98,8 +96,7 @@ module suitizen::suitizen {
 
         let transfer_request_recrod = TransferRequestRecord{
             id: object::new(ctx),
-            request_ids: table::new<u64, ID>(ctx),
-            request_amount: 0,
+            request_ids: table::new<ID, vector<ID>>(ctx),
         };
 
         // setup Kapy display
@@ -175,7 +172,7 @@ module suitizen::suitizen {
     ){
         config::assert_if_version_not_matched(config, VERSION);
         assert_if_card_id_not_matched(&request, card);
-        delete_transfer_request(record, request);
+        delete_transfer_request(record, request, card);
     }
 
     public entry fun confirm(
@@ -212,10 +209,10 @@ module suitizen::suitizen {
         config::assert_if_version_not_matched(config, VERSION);
         assert_if_confirm_amount_lt_threshold(&request);
         let new_owner = request.new_owner;
+        delete_transfer_request(record, request, &card);
 
         transfer::transfer(card, new_owner);
 
-        delete_transfer_request(record, request);
     }
 
     public fun create_card(
@@ -319,14 +316,16 @@ module suitizen::suitizen {
 
         let transfer_request = TransferRequest{
             id: object::new(ctx),
-            num: record.request_amount,
             card_id: card.id.to_inner(),
             new_owner,
             confirm_threshold,
             current_confirm: 0,
             guardians: copy_guardian(card),
         };
-        record.request_ids.add(record.request_amount, transfer_request.id.to_inner());
+
+        let requests = get_user_requests_mut(record, card);
+        requests.push_back(transfer_request.id.to_inner());
+        
         transfer_request
     }
 
@@ -519,13 +518,20 @@ module suitizen::suitizen {
      fun delete_transfer_request(
         record: &mut TransferRequestRecord,
         request: TransferRequest,
+        card: &SuitizenCard,
     ){
-        record.request_amount = record.request_amount -1;
-        record.request_ids.remove(request.num);
+        let requests = get_user_requests_mut(record, card);
+        
+        let mut current_idx = 0;
+        while(current_idx < requests.length()){
+            if (requests.borrow(current_idx).to_bytes() == request.id.to_bytes()){
+                requests.swap_remove(current_idx);
+            };
+            current_idx = current_idx + 1;
+        };
 
         let TransferRequest{
             id,
-            num: _,
             card_id: _,
             new_owner: _,
             confirm_threshold: _,
@@ -536,7 +542,19 @@ module suitizen::suitizen {
         object::delete(id);
     }
 
-    
+    fun get_user_requests_mut(
+        record: &mut TransferRequestRecord,
+        card: &SuitizenCard,
+    ): &mut vector<ID>{
+        if (record.request_ids.contains(card.id.to_inner())){
+            record.request_ids.borrow_mut(card.id.to_inner())
+        }else{
+            let requests = vector::empty<ID>();
+            record.request_ids.add(card.id.to_inner(), requests);
+            record.request_ids.borrow_mut(card.id.to_inner())
+        }
+    }
+
     public entry fun take_sui_ns(
         reg: &mut Registry,
         card: &mut SuitizenCard,
