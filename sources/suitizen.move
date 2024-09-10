@@ -525,13 +525,15 @@ module suitizen::suitizen {
 
     
     public entry fun take_sui_ns(
+        reg: &mut Registry,
         card: &mut SuitizenCard,
         ctx: &mut TxContext,
     ){
         let ns = dof::remove<Name, SuinsRegistration>(&mut card.id, Name{});
+        let mut name = string::utf8(b"");
+        name.append( card.first_name);
+        name.append(card.last_name);
+        reg.reg_tab.remove(*name.as_bytes());
         transfer::public_transfer(ns, ctx.sender())
-    }
-
-
-    
+    }    
 }
