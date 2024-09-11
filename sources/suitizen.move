@@ -238,8 +238,8 @@ module suitizen::suitizen {
         assert_if_index_existed(registry, img_index);
         assert_if_balance_not_matched(treasury, &balance);
 
-        let first_name = *sui_ns.domain().tld();
-        let last_name =  *sui_ns.domain().sld();
+        let first_name = *sui_ns.domain().sld();
+        let last_name =  *sui_ns.domain().tld();
         
         let mut name = string::utf8(b"");
         name.append( first_name);
@@ -341,8 +341,8 @@ module suitizen::suitizen {
 
         assert_if_no_ns(card);
 
-        let new_first_name = *sui_ns.domain().tld();
-        let new_last_name = *sui_ns.domain().sld();
+        let new_first_name = *sui_ns.domain().sld();
+        let new_last_name = *sui_ns.domain().tld();
         
         if ((*card.first_name.as_bytes() == *new_first_name.as_bytes()) &&
             (*card.last_name.as_bytes() == *new_last_name.as_bytes())
@@ -425,8 +425,8 @@ module suitizen::suitizen {
         registry: &Registry,
         sui_ns: &SuinsRegistration,
     ){
-        let first_name = *sui_ns.domain().tld();
-        let last_name =  *sui_ns.domain().sld();
+        let first_name = *sui_ns.domain().sld();
+        let last_name =  *sui_ns.domain().tld();
         
         let mut name = string::utf8(b"");
         name.append( first_name);
