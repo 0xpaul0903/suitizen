@@ -313,7 +313,11 @@ module suitizen::suitizen {
         if (card.guardians.length() == 1){
             confirm_threshold = 1;
         }else{
-            confirm_threshold = (card.guardians.length() / 2);
+            if (card.guardians.length() % 2 == 1){
+                confirm_threshold = (card.guardians.length() / 2) + 1;
+            }else{
+                confirm_threshold = (card.guardians.length() / 2);
+            }   
         };
 
         let transfer_request = TransferRequest{
