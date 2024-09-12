@@ -130,8 +130,9 @@ module suitizen::suitizen {
         new_backup: address,
     ){
         config::assert_if_version_not_matched(config, VERSION);
+        let new_owner = card.backup;
         card.backup = new_backup;
-        transfer::transfer(card, new_backup);
+        transfer::transfer(card, new_owner);
     }
 
     public fun create_card(
