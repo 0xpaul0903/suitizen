@@ -72,7 +72,8 @@ module suitizen::suitizen {
 
     public struct TransferRequestRecord has key {
         id: UID,
-        request_ids: Table<ID,vector<ID>>,
+        requester_to_requests: Table<ID,vector<ID>>,
+        guardian_to_requests: Table<ID, vector<ID>>,
     }
 
     public struct Name has copy, store, drop {}
@@ -96,7 +97,8 @@ module suitizen::suitizen {
 
         let transfer_request_recrod = TransferRequestRecord{
             id: object::new(ctx),
-            request_ids: table::new<ID, vector<ID>>(ctx),
+            requester_to_requests: table::new<ID, vector<ID>>(ctx),
+            guardian_to_requests: table::new<ID, vector<ID>>(ctx),
         };
 
         // setup Kapy display
@@ -325,6 +327,8 @@ module suitizen::suitizen {
 
         let requests = get_user_requests_mut(record, card);
         requests.push_back(transfer_request.id.to_inner());
+
+        store_guardian_request_to_record(record, &transfer_request, card);
         
         transfer_request
     }
@@ -530,6 +534,19 @@ module suitizen::suitizen {
             current_idx = current_idx + 1;
         };
 
+        current_idx = 0;
+        while(current_idx < request.guardians.length()){
+            let guardian_requests = get_guardian_requests_mut(record, *request.guardians.borrow(current_idx));
+            let mut inner_idx = 0;
+            while(inner_idx < guardian_requests.length()){
+                if (guardian_requests.borrow(inner_idx).to_bytes() == request.id.to_bytes()){
+                    guardian_requests.swap_remove(inner_idx);
+                };
+                inner_idx = inner_idx + 1;
+            };
+            current_idx = current_idx + 1;
+        };
+
         let TransferRequest{
             id,
             card_id: _,
@@ -546,12 +563,41 @@ module suitizen::suitizen {
         record: &mut TransferRequestRecord,
         card: &SuitizenCard,
     ): &mut vector<ID>{
-        if (record.request_ids.contains(card.id.to_inner())){
-            record.request_ids.borrow_mut(card.id.to_inner())
+        if (record.requester_to_requests.contains(card.id.to_inner())){
+            record.requester_to_requests.borrow_mut(card.id.to_inner())
         }else{
             let requests = vector::empty<ID>();
-            record.request_ids.add(card.id.to_inner(), requests);
-            record.request_ids.borrow_mut(card.id.to_inner())
+            record.requester_to_requests.add(card.id.to_inner(), requests);
+            record.requester_to_requests.borrow_mut(card.id.to_inner())
+        }
+    }
+
+    fun get_guardian_requests_mut(
+        record: &mut TransferRequestRecord,
+        guardian: ID,
+    ): &mut vector<ID>{
+        record.guardian_to_requests.borrow_mut(guardian)
+    }
+
+    fun store_guardian_request_to_record(
+        record: &mut TransferRequestRecord,
+        request: &TransferRequest,
+        card: &SuitizenCard,
+    ){
+        let guardians = card.guardians;
+
+        let mut current_idx = 0;
+        while (current_idx < guardians.length()){
+            if (record.guardian_to_requests.contains(*guardians.borrow(current_idx))){
+                let mut requests = record.guardian_to_requests.remove(*guardians.borrow(current_idx));
+                requests.push_back(request.id.to_inner());
+                record.guardian_to_requests.add(*guardians.borrow(current_idx), requests);
+            }else{
+                let mut requests = vector::empty<ID>();
+                requests.push_back(request.id.to_inner());
+                record.guardian_to_requests.add(*guardians.borrow(current_idx), requests);
+            };
+            current_idx = current_idx + 1;
         }
     }
 
