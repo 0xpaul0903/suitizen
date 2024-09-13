@@ -25,6 +25,8 @@ module suitizen::suitizen {
     const ENsExpired: u64 = 4;
     const ENoNsBoound:u64 = 5;
     const EBalanceNotMatched: u64 = 6;
+    const EBackEmpty: u64 = 7;
+    const EOutOfArrayLength: u64 = 8;
     
     const VERSION: u64 = 1;
 
@@ -50,7 +52,7 @@ module suitizen::suitizen {
         card_img: String, // blob id 
         face_feature: String,  // blob id 
         birth: u64,
-        backup: address,
+        backup: vector<address>,
     }
 
     public struct Name has copy, store, drop {}
@@ -116,7 +118,7 @@ module suitizen::suitizen {
         face_feature: String, // blob id 
         birth: u64,
         coin: Coin<SUI>,
-        backup: address,
+        backup: vector<address>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
@@ -126,12 +128,32 @@ module suitizen::suitizen {
 
     public entry fun transfer_card(
         config: &GlobalConfig,
+        card: SuitizenCard,
+        index: u64,
+        ctx: &TxContext,
+    ){
+        pass_card_to_backup(config, card, index, ctx);
+        
+    }
+    public fun pass_card_to_backup(
+        config: &GlobalConfig,
         mut card: SuitizenCard,
-        new_backup: address,
+        index: u64,
+        ctx: &TxContext,
     ){
         config::assert_if_version_not_matched(config, VERSION);
-        let new_owner = card.backup;
-        card.backup = new_backup;
+        assert_if_backup_empry(&card);
+        assert_if_out_of_array_length(&card, index);
+        let new_owner = *card.backup.borrow(index);
+        
+        if (card.backup.length() == 1 ){
+            card.backup.pop_back();
+            card.backup.push_back(ctx.sender());
+        }else{
+            card.backup.swap_remove(index);
+            card.backup.push_back(ctx.sender());
+        };
+
         transfer::transfer(card, new_owner);
     }
 
@@ -146,7 +168,7 @@ module suitizen::suitizen {
         face_feature: String, // blob id 
         birth: u64,
         balance: Balance<SUI>,
-        backup: address,
+        backup: vector<address>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) : SuitizenCard{
@@ -159,7 +181,7 @@ module suitizen::suitizen {
         assert_if_index_existed(registry, img_index);
         assert_if_balance_not_matched(treasury, &balance);
 
-        let first_name = *sui_ns.domain().sld();
+         let first_name = *sui_ns.domain().sld();
         let last_name =  *sui_ns.domain().tld();
         
         let mut name = string::utf8(b"");
@@ -316,12 +338,25 @@ module suitizen::suitizen {
         assert!(dof::exists_(&card.id, Name{}), ENoNsBoound);
     }
 
+    fun assert_if_backup_empry(
+        card: &SuitizenCard,
+    ){
+        assert!(card.backup.length() != 0 , EBackEmpty);
+    }
+
 
     fun assert_if_balance_not_matched(
         treasury: &Treasury, 
         balance: &Balance<SUI>,
     ){
         assert!(treasury.register_fee == balance.value(), EBalanceNotMatched)
+    }
+
+    fun assert_if_out_of_array_length(
+        card: &SuitizenCard,
+        index: u64
+    ){
+        assert!(card.backup.length()-1 >= index, EOutOfArrayLength);
     }
 
     public entry fun take_sui_ns(
