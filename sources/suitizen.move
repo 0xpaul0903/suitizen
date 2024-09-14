@@ -51,6 +51,7 @@ module suitizen::suitizen {
         first_name: String,
         card_img: String, // blob id 
         face_feature: String,  // blob id 
+        embedded_img: String,
         birth: u64,
         backup: vector<address>,
     }
@@ -197,6 +198,7 @@ module suitizen::suitizen {
             last_name,
             card_img,
             face_feature,
+            embedded_img: pfp_img,
             birth,
             backup,
         };
